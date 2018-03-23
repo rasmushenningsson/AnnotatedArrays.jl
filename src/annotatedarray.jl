@@ -22,7 +22,6 @@ SingletonArray{T,N}(A::AbstractArray{T,N}) = SingletonArray{T,N,typeof(A)}(A)
 
 
 
-#array(A::SingletonArray) = A.array # TODO: deprecate
 convert(::Type{Array}, a::SingletonArray) = a.array
 
 
@@ -103,7 +102,6 @@ AnnotatedArray{T,N}(A::AbstractArray{T,N}) =
 	AnnotatedArray{T,N,typeof(A)}(A,Dict{Symbol,SingletonArray}())
 
 
-# array(A::AnnotatedArray) = A.array # TODO: deprecate
 convert(::Type{Array}, a::AnnotatedArray) = a.array
 
 annotations(A::AnnotatedArray) = A.annotations
@@ -334,12 +332,6 @@ end
 # TODO: rewrite using smarter widths (i.e. gather width of each column first, and print using this info later)
 #function showslice(io::IO,A::AnnotatedArray, rAnnot, cAnnot, bAnnot, sAnnot)
 function showslice(io::IO,A::AnnotatedArray, rAnnot, cAnnot, bAnnot)
-	# singleton annotations
-	# for (k,v) in sAnnot
-	# 	print(io,k,"=",v[1], '\t')
-	# end
-	# isempty(sAnnot) || println(io)
-
 	# full annotations
 	for k in bAnnot
 		v = A[k]
@@ -356,9 +348,6 @@ function showslice(io::IO,A::AnnotatedArray, rAnnot, cAnnot, bAnnot)
 			i!=size(v,1) && println()
 		end
 		println(io,post)
-
-		#println(io,k,"=")
-		#println(io,v)
 	end
 
 
@@ -367,14 +356,6 @@ function showslice(io::IO,A::AnnotatedArray, rAnnot, cAnnot, bAnnot)
 		v = A[k]
 		print(io,"\t"^length(rAnnot))
 		print(io,k)
-
-		# println("typeof(A)=",typeof(A))
-		# println("k=",k)
-		# println("v=",v)
-		# println("typeof(v)=",typeof(v))
-		# println("size(v)=",size(v))
-		# println("length(v.indexes)=",length(v.indexes))
-		# println("v[1]=",v[1])
 
 		for j=1:size(A,2)
 			print(io,'\t', v[j])
@@ -392,12 +373,6 @@ function showslice(io::IO,A::AnnotatedArray, rAnnot, cAnnot, bAnnot)
 	for i=1:size(A,1)
 		for k in rAnnot
 			v = A[k]
-			# println("v=",v)
-			# println("i=",i)
-			# println("typeof(v)=",typeof(v))
-			# println("typeof(i)=",typeof(i))
-			# println("size(v)=",size(v))
-			# println("v[i]=",v[i])
 			print(io, v[i], '\t')
 		end
 		print(io,'|')
@@ -475,10 +450,6 @@ function show(io::IO, A::AnnotatedArray)
 		println(io, "Showing ", join(szSub,'x'), " part of ", join(sz,'x'), " ", typeof(A), ":")
 		showall(B)
 	end
-	
-	# B = view(A, map(n->1:n, szSub)...)
-	# sz!=szSub && println(io, "Showing ", join(szSub,'x'), " part of ", join(sz,'x'), " array.")
-	# showall(B)
 end
 
 
@@ -560,50 +531,6 @@ evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.!=,T}) = evaluatevalue(A,ind.
 !={T}(a::T,b::Annot)  = Cmp{T,:.!=,Annot}(a,b)
 
 
-# # TODO: generate code for all operators using macros
-# evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.<,T}) = evaluatevalue(A,ind.lhs) .< evaluatevalue(A,ind.rhs)
-# broadcast(::typeof(<),a::Annot,b::Annot) = Cmp{Annot,:.<,Annot}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(<),a::Annot,b::T) = Cmp{Annot,:.<,T}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(<),a::T,b::Annot) = Cmp{T,:.<,Annot}(a,b)
-# broadcast{T}(::typeof(<),a::Annot,b::T)  = Cmp{Annot,:.<,T}(a,b)
-# broadcast{T}(::typeof(<),a::T,b::Annot)  = Cmp{T,:.<,Annot}(a,b)
-
-# evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.<=,T}) = evaluatevalue(A,ind.lhs) .<= evaluatevalue(A,ind.rhs)
-# broadcast(::typeof(<=),a::Annot,b::Annot) = Cmp{Annot,:.<=,Annot}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(<=),a::Annot,b::T) = Cmp{Annot,:.<=,T}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(<=),a::T,b::Annot) = Cmp{T,:.<=,Annot}(a,b)
-# broadcast{T}(::typeof(<=),a::Annot,b::T)  = Cmp{Annot,:.<=,T}(a,b)
-# broadcast{T}(::typeof(<=),a::T,b::Annot)  = Cmp{T,:.<=,Annot}(a,b)
-
-# evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.>,T}) = evaluatevalue(A,ind.lhs) .> evaluatevalue(A,ind.rhs)
-# broadcast(::typeof(>),a::Annot,b::Annot) = Cmp{Annot,:.>,Annot}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(>),a::Annot,b::T) = Cmp{Annot,:.>,T}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(>),a::T,b::Annot) = Cmp{T,:.>,Annot}(a,b)
-# broadcast{T}(::typeof(>),a::Annot,b::T)  = Cmp{Annot,:.>,T}(a,b)
-# broadcast{T}(::typeof(>),a::T,b::Annot)  = Cmp{T,:.>,Annot}(a,b)
-
-# evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.>=,T}) = evaluatevalue(A,ind.lhs) .>= evaluatevalue(A,ind.rhs)
-# broadcast(::typeof(>=),a::Annot,b::Annot) = Cmp{Annot,:.>=,Annot}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(>=),a::Annot,b::T) = Cmp{Annot,:.>=,T}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(>=),a::T,b::Annot) = Cmp{T,:.>=,Annot}(a,b)
-# broadcast{T}(::typeof(>=),a::Annot,b::T)  = Cmp{Annot,:.>=,T}(a,b)
-# broadcast{T}(::typeof(>=),a::T,b::Annot)  = Cmp{T,:.>=,Annot}(a,b)
-
-# evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.==,T}) = evaluatevalue(A,ind.lhs) .== evaluatevalue(A,ind.rhs)
-# broadcast(::typeof(==),a::Annot,b::Annot) = Cmp{Annot,:.==,Annot}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(==),a::Annot,b::T) = Cmp{Annot,:.==,T}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(==),a::T,b::Annot) = Cmp{T,:.==,Annot}(a,b)
-# broadcast{T}(::typeof(==),a::Annot,b::T)  = Cmp{Annot,:.==,T}(a,b)
-# broadcast{T}(::typeof(==),a::T,b::Annot)  = Cmp{T,:.==,Annot}(a,b)
-
-# evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.!=,T}) = evaluatevalue(A,ind.lhs) .!= evaluatevalue(A,ind.rhs)
-# broadcast(::typeof(!=),a::Annot,b::Annot) = Cmp{Annot,:.!=,Annot}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(!=),a::Annot,b::T) = Cmp{Annot,:.!=,T}(a,b)
-# broadcast{T<:AbstractArray}(::typeof(!=),a::T,b::Annot) = Cmp{T,:.!=,Annot}(a,b)
-# broadcast{T}(::typeof(!=),a::Annot,b::T)  = Cmp{Annot,:.!=,T}(a,b)
-# broadcast{T}(::typeof(!=),a::T,b::Annot)  = Cmp{T,:.!=,Annot}(a,b)
-
-
 
 # Set functionality
 function evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:inset,T})
@@ -636,14 +563,7 @@ evaluateindex{T}(A::AnnotatedArray, ind::Unary{:~,T}) = ~evaluateindex(A,ind.rhs
 
 
 function transpose{T,S}(A::AnnotatedArray{T,2,S})
-	# println(typeof(A.annotations))
-	# println(typeof(A.array))
-
 	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],transpose(x[2])), A.annotations))
-	# println(typeof(annotations))
-	# println(typeof(transpose(A.array)))
-	
-	#AnnotatedArray(transpose(A.array),annotations)
 	a = AnnotatedArray(transpose(A.array))
 	a.annotations = annotations
 	a
