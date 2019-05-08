@@ -15,10 +15,10 @@ import Base: size, getindex, setindex!, copy, view,
 abstract type AnnotatedIndex end
 
 
-type SingletonArray{T,N,S} <: AbstractArray{T,N}
+struct SingletonArray{T,N,S} <: AbstractArray{T,N}
 	array::S # where S <: AbstractArray{T,N}
 end
-SingletonArray{T,N}(A::AbstractArray{T,N}) = SingletonArray{T,N,typeof(A)}(A)
+SingletonArray(A::AbstractArray{T,N}) where {T,N} = SingletonArray{T,N,typeof(A)}(A)
 
 
 
@@ -47,7 +47,7 @@ setindex!(A::SingletonArray, v, i::Int) = setindex(A.array,v,i)
 
 # TODO: review what happens with empty indices (i.e. [], [false, false, ..., false], etc.)
 singletonindex(sz::Int, i::Int) = sz==1 ? 1 : i
-singletonindex(sz::Int, r::Range) = sz==1 ? Colon() : r # TODO: make type stable by creating range of same type with only 1 element
+singletonindex(sz::Int, r::AbstractRange) = sz==1 ? Colon() : r # TODO: make type stable by creating range of same type with only 1 element
 singletonindex(sz::Int, ::Colon) = Colon()
 
 singletonindex(sz::Int, arr::Array{Int,1}) = sz==1 ? [1] : arr
@@ -92,13 +92,13 @@ ctranspose(A::SingletonArray) = SingletonArray(ctranspose(A.array))
 
 
 
-type AnnotatedArray{T,N,S} <: AbstractArray{T,N}
+struct AnnotatedArray{T,N,S} <: AbstractArray{T,N}
 	array::S # where S <: AbstractArray{T,N}
 	annotations::Dict{Symbol,SingletonArray} # TODO: Use SortedDict for order stability?
 end
 
 
-AnnotatedArray{T,N}(A::AbstractArray{T,N}) = 
+AnnotatedArray(A::AbstractArray{T,N}) where {T,N} =
 	AnnotatedArray{T,N,typeof(A)}(A,Dict{Symbol,SingletonArray}())
 
 
@@ -115,12 +115,12 @@ function allowedsize(szArray::Tuple,szAnnotation::Tuple)
 	all(i->szAnnotation[i]==1 || szAnnotation[i]==szArray[i], 1:length(szAnnotation))
 end
 
-function annotate!{T,N}(A::AnnotatedArray{T,N},name::Symbol,annotation::SingletonArray)
+function annotate!(A::AnnotatedArray{T,N},name::Symbol,annotation::SingletonArray) where {T,N}
 	@assert allowedsize(size(A),size(annotation))
 	A.annotations[name] = annotation
 	A
 end
-annotate!{T,N}(A::AnnotatedArray{T,N},name::Symbol,annotation::AbstractArray) = annotate!(A,name,SingletonArray(annotation))
+annotate!(A::AnnotatedArray{T,N},name::Symbol,annotation::AbstractArray) where {T,N} = annotate!(A,name,SingletonArray(annotation))
 
 
 
@@ -157,7 +157,9 @@ function deannotateindex(A::AnnotatedArray, dim::Int, ind::AnnotatedIndex)
 end
 
 function deannotateindex(A::AnnotatedArray, I...)
-	([deannotateindex(A,i,ind) for (i,ind) in enumerate(I)]...)
+	([deannotateindex(A,i,ind) for (i,ind) in enumerate(I)]..., )
+	# ([ deannotateindex(A, i, ind) for (i, ind) = enumerate(I) ]...)
+	# ([ deannotateindex(A, i, ind) for (i, ind) = enumerate(I) ]...,)
 end
 
 
@@ -414,7 +416,7 @@ function showall(io::IO, A::AnnotatedArray)
 		# show those that are singleton in all dimensions
 		length(sAnnot)>0 && printsingletonannotations(io, A, sAnnot[.!map(any,nonSingletonDims)])
 
-		prevslice = CartesianIndex((zeros(Int,length(trailingSz))...))
+		prevslice = CartesianIndex((zeros(Int,length(trailingSz))...,))
 		for slice in CartesianRange(trailingSz) # for each slice
 			printlnslicedesc(io,slice)
 			B = view(A,:,:,slice.I...) # TODO: can I avoid using CartesianIndex.I ???
@@ -440,7 +442,7 @@ function show(io::IO, A::AnnotatedArray)
 	szLimits[1] = 20
 	length(szLimits)>1 && (szLimits[2] = 8)
 
-	szSub = (min.([sz...],szLimits)...)
+	szSub = (min.([sz...],szLimits)...,)
 
 	if sz==szSub
 		println(io, join(sz,'x'), " ", typeof(A), ":")
@@ -461,18 +463,18 @@ display(A::AnnotatedArray) = show(STDOUT,A)
 
 
 
-immutable Annot
+struct Annot
 	s::Symbol
 end
 
 annot(s::Symbol) = Annot(s)
 annot(s::AbstractString) = Annot(symbol(s))
 
-immutable Unary{Op,T} <: AnnotatedIndex
+struct Unary{Op,T} <: AnnotatedIndex
 	rhs::T
 end
 
-immutable Cmp{S,Op,T} <: AnnotatedIndex
+struct Cmp{S,Op,T} <: AnnotatedIndex
 	lhs::S
 	rhs::T
 end
@@ -488,88 +490,88 @@ evaluateindex(A::AnnotatedArray, ind) = ind
 
 
 # TODO: generate code for all operators using macros
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.<,T}) = evaluatevalue(A,ind.lhs) .< evaluatevalue(A,ind.rhs)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:.<,T}) where {S,T} = evaluatevalue(A,ind.lhs) .< evaluatevalue(A,ind.rhs)
 <(a::Annot,b::Annot) = Cmp{Annot,:.<,Annot}(a,b)
-<{T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:.<,T}(a,b)
-<{T<:AbstractArray}(a::T,b::Annot) = Cmp{T,:.<,Annot}(a,b)
-<{T}(a::Annot,b::T)  = Cmp{Annot,:.<,T}(a,b)
-<{T}(a::T,b::Annot)  = Cmp{T,:.<,Annot}(a,b)
+<(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:.<,T}(a,b)
+<(a::T,b::Annot) where {T<:AbstractArray} = Cmp{T,:.<,Annot}(a,b)
+<(a::Annot,b::T) where {T} = Cmp{Annot,:.<,T}(a,b)
+<(a::T,b::Annot) where {T} = Cmp{T,:.<,Annot}(a,b)
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.<=,T}) = evaluatevalue(A,ind.lhs) .<= evaluatevalue(A,ind.rhs)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:.<=,T}) where {S,T} = evaluatevalue(A,ind.lhs) .<= evaluatevalue(A,ind.rhs)
 <=(a::Annot,b::Annot) = Cmp{Annot,:.<=,Annot}(a,b)
-<={T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:.<=,T}(a,b)
-<={T<:AbstractArray}(a::T,b::Annot) = Cmp{T,:.<=,Annot}(a,b)
-<={T}(a::Annot,b::T)  = Cmp{Annot,:.<=,T}(a,b)
-<={T}(a::T,b::Annot)  = Cmp{T,:.<=,Annot}(a,b)
+<=(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:.<=,T}(a,b)
+<=(a::T,b::Annot) where {T<:AbstractArray} = Cmp{T,:.<=,Annot}(a,b)
+<=(a::Annot,b::T) where {T} = Cmp{Annot,:.<=,T}(a,b)
+<=(a::T,b::Annot) where {T} = Cmp{T,:.<=,Annot}(a,b)
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.>,T}) = evaluatevalue(A,ind.lhs) .> evaluatevalue(A,ind.rhs)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:.>,T}) where {S,T} = evaluatevalue(A,ind.lhs) .> evaluatevalue(A,ind.rhs)
 >(a::Annot,b::Annot) = Cmp{Annot,:.>,Annot}(a,b)
->{T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:.>,T}(a,b)
->{T<:AbstractArray}(a::T,b::Annot) = Cmp{T,:.>,Annot}(a,b)
->{T}(a::Annot,b::T)  = Cmp{Annot,:.>,T}(a,b)
->{T}(a::T,b::Annot)  = Cmp{T,:.>,Annot}(a,b)
+>(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:.>,T}(a,b)
+>(a::T,b::Annot) where {T<:AbstractArray} = Cmp{T,:.>,Annot}(a,b)
+>(a::Annot,b::T) where {T} = Cmp{Annot,:.>,T}(a,b)
+>(a::T,b::Annot) where {T} = Cmp{T,:.>,Annot}(a,b)
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.>=,T}) = evaluatevalue(A,ind.lhs) .>= evaluatevalue(A,ind.rhs)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:.>=,T}) where {S,T} = evaluatevalue(A,ind.lhs) .>= evaluatevalue(A,ind.rhs)
 >=(a::Annot,b::Annot) = Cmp{Annot,:.>=,Annot}(a,b)
->={T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:.>=,T}(a,b)
->={T<:AbstractArray}(a::T,b::Annot) = Cmp{T,:.>=,Annot}(a,b)
->={T}(a::Annot,b::T)  = Cmp{Annot,:.>=,T}(a,b)
->={T}(a::T,b::Annot)  = Cmp{T,:.>=,Annot}(a,b)
+>=(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:.>=,T}(a,b)
+>=(a::T,b::Annot) where {T<:AbstractArray} = Cmp{T,:.>=,Annot}(a,b)
+>=(a::Annot,b::T) where {T} = Cmp{Annot,:.>=,T}(a,b)
+>=(a::T,b::Annot) where {T} = Cmp{T,:.>=,Annot}(a,b)
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.==,T}) = evaluatevalue(A,ind.lhs) .== evaluatevalue(A,ind.rhs)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:.==,T}) where {S,T} = evaluatevalue(A,ind.lhs) .== evaluatevalue(A,ind.rhs)
 ==(a::Annot,b::Annot) = Cmp{Annot,:.==,Annot}(a,b)
-=={T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:.==,T}(a,b)
-=={T<:AbstractArray}(a::T,b::Annot) = Cmp{T,:.==,Annot}(a,b)
-=={T}(a::Annot,b::T)  = Cmp{Annot,:.==,T}(a,b)
-=={T}(a::T,b::Annot)  = Cmp{T,:.==,Annot}(a,b)
+==(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:.==,T}(a,b)
+==(a::T,b::Annot) where {T<:AbstractArray} = Cmp{T,:.==,Annot}(a,b)
+==(a::Annot,b::T) where {T} = Cmp{Annot,:.==,T}(a,b)
+==(a::T,b::Annot) where {T} = Cmp{T,:.==,Annot}(a,b)
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:.!=,T}) = evaluatevalue(A,ind.lhs) .!= evaluatevalue(A,ind.rhs)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:.!=,T}) where {S,T} = evaluatevalue(A,ind.lhs) .!= evaluatevalue(A,ind.rhs)
 !=(a::Annot,b::Annot) = Cmp{Annot,:.!=,Annot}(a,b)
-!={T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:.!=,T}(a,b)
-!={T<:AbstractArray}(a::T,b::Annot) = Cmp{T,:.!=,Annot}(a,b)
-!={T}(a::Annot,b::T)  = Cmp{Annot,:.!=,T}(a,b)
-!={T}(a::T,b::Annot)  = Cmp{T,:.!=,Annot}(a,b)
+!=(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:.!=,T}(a,b)
+!=(a::T,b::Annot) where {T<:AbstractArray} = Cmp{T,:.!=,Annot}(a,b)
+!=(a::Annot,b::T) where {T} = Cmp{Annot,:.!=,T}(a,b)
+!=(a::T,b::Annot) where {T} = Cmp{T,:.!=,Annot}(a,b)
 
 
 
 # Set functionality
-function evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:inset,T})
+function evaluateindex(A::AnnotatedArray, ind::Cmp{S,:inset,T}) where {S,T}
 	rhs = evaluatevalue(A,ind.rhs)
 	map(x->x∈rhs, evaluatevalue(A,ind.lhs))
 end
-inset{T<:AbstractArray}(a::Annot,b::T) = Cmp{Annot,:inset,T}(a,b)
-inset{T<:AbstractArray}(s::Symbol,b::T) = inset(annot(s),b)
+inset(a::Annot,b::T) where {T<:AbstractArray} = Cmp{Annot,:inset,T}(a,b)
+inset(s::Symbol,b::T) where {T<:AbstractArray} = inset(annot(s),b)
 
 
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:&,T}) = evaluateindex(A,ind.lhs) .& evaluateindex(A,ind.rhs)
-Base. &{C<:Cmp,D<:Cmp}(a::C,b::D) = Cmp{C,:&,D}(a,b)
-Base. &{C<:Cmp,T}(a::C,b::T)      = Cmp{C,:&,T}(a,b)
-Base. &{C<:Cmp,T}(a::T,b::C)      = Cmp{T,:&,C}(a,b)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:&,T}) where {S,T} = evaluateindex(A,ind.lhs) .& evaluateindex(A,ind.rhs)
+Base. &(a::C,b::D) where {C<:Cmp,D<:Cmp} = Cmp{C,:&,D}(a,b)
+Base. &(a::C,b::T) where {C<:Cmp,T}      = Cmp{C,:&,T}(a,b)
+Base. &(a::T,b::C) where {C<:Cmp,T}      = Cmp{T,:&,C}(a,b)
 
-evaluateindex{S,T}(A::AnnotatedArray, ind::Cmp{S,:|,T}) = evaluateindex(A,ind.lhs) .| evaluateindex(A,ind.rhs)
-Base. |{C<:Cmp,D<:Cmp}(a::C,b::D) = Cmp{C,:|,D}(a,b)
-Base. |{C<:Cmp,T}(a::C,b::T)      = Cmp{C,:|,T}(a,b)
-Base. |{C<:Cmp,T}(a::T,b::C)      = Cmp{T,:|,C}(a,b)
-
-
-evaluateindex{T}(A::AnnotatedArray, ind::Unary{:!,T}) = !evaluateindex(A,ind.rhs)
-!{C<:Cmp}(a::C) = Unary{:!,C}(a)
-
-evaluateindex{T}(A::AnnotatedArray, ind::Unary{:~,T}) = ~evaluateindex(A,ind.rhs)
-~{C<:Cmp}(a::C) = Unary{:~,C}(a)
+evaluateindex(A::AnnotatedArray, ind::Cmp{S,:|,T}) where {S,T} = evaluateindex(A,ind.lhs) .| evaluateindex(A,ind.rhs)
+Base. |(a::C,b::D) where {C<:Cmp,D<:Cmp} = Cmp{C,:|,D}(a,b)
+Base. |(a::C,b::T) where {C<:Cmp,T}      = Cmp{C,:|,T}(a,b)
+Base. |(a::T,b::C) where {C<:Cmp,T}      = Cmp{T,:|,C}(a,b)
 
 
+evaluateindex(A::AnnotatedArray, ind::Unary{:!,T}) where {T}= !evaluateindex(A,ind.rhs)
+!(a::C) where {C<:Cmp} = Unary{:!,C}(a)
+
+evaluateindex(A::AnnotatedArray, ind::Unary{:~,T}) where {T}= ~evaluateindex(A,ind.rhs)
+~(a::C) where {C<:Cmp} = Unary{:~,C}(a)
 
 
-function transpose{T,S}(A::AnnotatedArray{T,2,S})
+
+
+function transpose(A::AnnotatedArray{T,2,S}) where {T,S}
 	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],transpose(x[2])), A.annotations))
 	a = AnnotatedArray(transpose(A.array))
 	a.annotations = annotations
 	a
 end
 
-function ctranspose{T,S}(A::AnnotatedArray{T,2,S})
+function ctranspose(A::AnnotatedArray{T,2,S}) where {T,S}
 	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],ctranspose(x[2])), A.annotations))
 	a = AnnotatedArray(ctranspose(A.array))
 	a.annotations = annotations
@@ -597,7 +599,7 @@ function convert(::Type{AnnotatedArray}, d::Dict{Symbol,Any})
 	end
 	a
 end
-function convert{T<:AbstractString}(::Type{AnnotatedArray}, d::Dict{T,Any})
+function convert(::Type{AnnotatedArray}, d::Dict{T,Any}) where {T<:AbstractString}
 	convert(AnnotatedArray,Dict{Symbol,Any}([Symbol(k)=>v for (k,v) in d])) # can be simplified by call to map in julia 0.5	
 end
 
