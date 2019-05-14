@@ -6,7 +6,8 @@ export
 	annotationnames,
 	annotate!,
 	annot,
-	inset
+	inset,
+	showall
 
 include("annotatedarray.jl")
 
