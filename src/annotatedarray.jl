@@ -7,9 +7,9 @@ import Base: size, getindex, setindex!, copy, view,
              !, ~,
              cat, vcat, hcat,
              #+, -,
-             transpose, ctranspose,
+             # transpose, ctranspose,
              convert,
-             show, showall, print, display
+             show, print, display
 
 
 abstract type AnnotatedIndex end
@@ -87,8 +87,8 @@ end
 
 
 
-transpose(A::SingletonArray) = SingletonArray(transpose(A.array))
-ctranspose(A::SingletonArray) = SingletonArray(ctranspose(A.array))
+# transpose(A::SingletonArray) = SingletonArray(transpose(A.array))
+# ctranspose(A::SingletonArray) = SingletonArray(ctranspose(A.array))
 
 
 
@@ -564,19 +564,19 @@ evaluateindex(A::AnnotatedArray, ind::Unary{:~,T}) where {T}= ~evaluateindex(A,i
 
 
 
-function transpose(A::AnnotatedArray{T,2,S}) where {T,S}
-	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],transpose(x[2])), A.annotations))
-	a = AnnotatedArray(transpose(A.array))
-	a.annotations = annotations
-	a
-end
+# function transpose(A::AnnotatedArray{T,2,S}) where {T,S}
+# 	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],transpose(x[2])), A.annotations))
+# 	a = AnnotatedArray(transpose(A.array))
+# 	a.annotations = annotations
+# 	a
+# end
 
-function ctranspose(A::AnnotatedArray{T,2,S}) where {T,S}
-	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],ctranspose(x[2])), A.annotations))
-	a = AnnotatedArray(ctranspose(A.array))
-	a.annotations = annotations
-	a
-end
+# function ctranspose(A::AnnotatedArray{T,2,S}) where {T,S}
+# 	annotations = Dict{Symbol,SingletonArray}(map(x->(x[1],ctranspose(x[2])), A.annotations))
+# 	a = AnnotatedArray(ctranspose(A.array))
+# 	a.annotations = annotations
+# 	a
+# end
 
 
 
